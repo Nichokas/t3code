@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import { collectComposerInlineTokens, composerMathRanges } from "./composerInlineTokens.ts";
+import {
+  collectComposerInlineTokens,
+  composerMathRanges,
+  leadingSkillMention,
+} from "./composerInlineTokens.ts";
 import { serializeComposerFileLink } from "./composerTrigger.ts";
 
 describe("collectComposerInlineTokens", () => {
@@ -218,5 +222,16 @@ describe("collectComposerInlineTokens", () => {
     expect(composerMathRanges(`${link} sets $x_i$`).map((formula) => formula.source)).toEqual([
       "$x_i$",
     ]);
+  });
+});
+
+describe("leadingSkillMention", () => {
+  it.each([
+    { text: "  €deploy\nship it", mention: { name: "deploy", rest: "\nship it" } },
+    { text: "$deploy", mention: { name: "deploy", rest: "" } },
+    { text: "$25 off", mention: undefined },
+    { text: "$deploy, then ship", mention: undefined },
+  ])("reads $text", ({ text, mention }) => {
+    expect(leadingSkillMention(text)).toEqual(mention);
   });
 });

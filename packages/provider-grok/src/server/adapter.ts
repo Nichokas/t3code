@@ -4,7 +4,7 @@ import {
   isXAiTaskCompletedWakeNotification,
   xAiRateLimitedErrorCode,
 } from "./xaiAcpExtension.ts";
-import { discoverGrokSkills, leadingGrokSkillMention } from "./skills.ts";
+import { discoverGrokSkills } from "./skills.ts";
 import * as HostProcess from "@t3tools/shared/HostProcess";
 import { resolveSelfInvocation, type SelfInvocation } from "@t3tools/shared/nodeRuntime";
 import {
@@ -22,6 +22,7 @@ import * as Schema from "effect/Schema";
 import type * as Scope from "effect/Scope";
 import * as ChildProcessSpawner from "effect/process/ChildProcessSpawner";
 import * as EffectAcpErrors from "effect-acp/errors";
+import { leadingSkillMention } from "@t3tools/shared/composerInlineTokens";
 import { getModelSelectionStringOptionValue } from "@t3tools/shared/model";
 
 import * as McpProviderSessions from "@t3tools/provider-core/server/McpProviderSessions";
@@ -333,7 +334,7 @@ export function makeGrokAcpAdapterFlavor(
     // Grok expands only a leading `/name`, while the `$` picker inserts `$name` from the
     // `grok inspect` catalog. Ask that catalog again so other `$` text is left alone.
     rewriteUserText: (text, turnInput) => {
-      const mention = leadingGrokSkillMention(text);
+      const mention = leadingSkillMention(text);
       if (mention === undefined) return Effect.succeed(text);
       return discoverGrokSkills(
         options.settings,

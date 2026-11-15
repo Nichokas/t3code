@@ -6,12 +6,13 @@ import {
   type OrchestrationV2ProviderCapabilities,
 } from "@t3tools/contracts";
 import { KiroSettings } from "../settings.ts";
+import { leadingSkillMention } from "@t3tools/shared/composerInlineTokens";
 import { getModelSelectionStringOptionValue } from "@t3tools/shared/model";
 import type * as SecureRandom from "effect/crypto/SecureRandom";
 import * as Effect from "effect/Effect";
-import type * as FileSystem from "effect/FileSystem";
+import * as FileSystem from "effect/FileSystem";
 import * as Option from "effect/Option";
-import type * as Path from "effect/Path";
+import * as Path from "effect/Path";
 import * as Schema from "effect/Schema";
 import type * as Scope from "effect/Scope";
 import * as Stream from "effect/Stream";
@@ -50,6 +51,7 @@ import {
   kiroPermissionDisposition,
   makeKiroAcpRuntime,
 } from "./acpSupport.ts";
+import { discoverKiroSkills, rewriteKiroSkillMention } from "./skills.ts";
 
 export const KIRO_PROVIDER = ProviderDriverKind.make("kiro");
 /** T3's slug for "Kiro default", and Kiro's documented default model id. */
@@ -535,7 +537,11 @@ function kiroPromptFailure(cause: unknown) {
   });
 }
 
-function makeKiroAcpAdapterFlavor(options: KiroAdapterV2Options): AcpAdapterV2Flavor {
+function makeKiroAcpAdapterFlavor(
+  options: KiroAdapterV2Options,
+  fileSystem: FileSystem.FileSystem,
+  path: Path.Path,
+): AcpAdapterV2Flavor {
   const makeRuntime =
     options.makeRuntime ??
     ((input: AcpAdapterV2RuntimeInput) => {
@@ -556,6 +562,18 @@ function makeKiroAcpAdapterFlavor(options: KiroAdapterV2Options): AcpAdapterV2Fl
     // `_kiro/hooks/*` requests, which T3 does not answer.
     clientCapabilitiesMeta: { kiro: { hooks: { enabled: true, v2: true } } },
     makeRuntime,
+    // Rescan per turn so a skill added since the session started still runs.
+    rewriteUserText: (text, turnInput) =>
+      leadingSkillMention(text) === undefined
+        ? Effect.succeed(text)
+        : discoverKiroSkills({
+            cwd: turnInput.runtimePolicy.cwd ?? undefined,
+            environment: options.environment,
+          }).pipe(
+            Effect.map((skills) => rewriteKiroSkillMention(text, skills)),
+            Effect.provideService(FileSystem.FileSystem, fileSystem),
+            Effect.provideService(Path.Path, path),
+          ),
     promptFailure: kiroPromptFailure,
     ignoreSessionUpdate: makeKiroCloudConfigFilter(),
     normalizeSessionUpdate: (notification) =>
@@ -591,9 +609,10 @@ function makeKiroAcpAdapterFlavor(options: KiroAdapterV2Options): AcpAdapterV2Fl
 export const makeKiroAdapterV2 = Effect.fn("makeKiroAdapterV2")(function* (
   options: KiroAdapterV2Options,
 ) {
+  const flavor = makeKiroAcpAdapterFlavor(options, yield* FileSystem.FileSystem, yield* Path.Path);
   return yield* makeAcpAdapterV2({
     instanceId: options.instanceId,
-    flavor: makeKiroAcpAdapterFlavor(options),
+    flavor,
     selfInvocation: options.selfInvocation,
     ...(options.nativeLogging === undefined ? {} : { nativeLogging: options.nativeLogging }),
     ...(options.testHooks === undefined ? {} : { testHooks: options.testHooks }),

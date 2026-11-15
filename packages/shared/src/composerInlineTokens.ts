@@ -25,6 +25,8 @@ const SKILL_MENTION_SOURCE =
     .source;
 const SKILL_TOKEN_REGEX = new RegExp(`${SKILL_MENTION_SOURCE}(?=\\s)`, "gu");
 export const SKILL_MENTION_PATTERN = new RegExp(`${SKILL_MENTION_SOURCE}(?=\\s|$)`, "gu");
+// The composer's chip rule, anchored to the message start, so `$25` never names a skill.
+const LEADING_SKILL_MENTION = new RegExp(`^\\s*${SKILL_MENTION_PATTERN.source}`, "u");
 const MENTION_TOKEN_REGEX = /(^|\s)@(?:"((?:\\.|[^"\\])*)"|([^\s@"]+))(?=\s)/g;
 // Bound unmatched-bracket rescans to avoid quadratic work; only basenames survive, and common filesystems cap them at 255.
 const MAX_FILE_LINK_LABEL_LENGTH = 512;
@@ -163,4 +165,13 @@ export function collectComposerInlineTokens(
       (match) => !math.some((formula) => match.start < formula.end && match.end > formula.start),
     )
     .sort((left, right) => left.start - right.start);
+}
+
+/** A message opening with a mention, such as `deploy` and ` ship it` for `$deploy ship it`. */
+export function leadingSkillMention(
+  text: string,
+): { readonly name: string; readonly rest: string } | undefined {
+  const match = LEADING_SKILL_MENTION.exec(text);
+  if (match?.[2] === undefined) return undefined;
+  return { name: match[2], rest: text.slice(match[0].length) };
 }
