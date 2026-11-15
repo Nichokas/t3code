@@ -7,44 +7,75 @@ import * as Path from "effect/Path";
 import { discoverKiroSkills, rewriteKiroSkillMention } from "./skills.ts";
 
 it.layer(NodeServices.layer)("discoverKiroSkills", (it) => {
-  it.effect("lists workspace skills over same-named home skills, with frontmatter", () =>
+  it.effect("lists workspace, home and cloud skills, nearest first, with frontmatter", () =>
     Effect.gen(function* () {
       const fileSystem = yield* FileSystem.FileSystem;
       const path = yield* Path.Path;
       const workspace = yield* fileSystem.makeTempDirectoryScoped({ prefix: "t3-kiro-ws-" });
       const home = yield* fileSystem.makeTempDirectoryScoped({ prefix: "t3-kiro-home-" });
+      const workspaceSkills = path.join(workspace, ".kiro", "skills");
+      const homeSkills = path.join(home, ".kiro", "skills");
+      const cloudSkills = path.join(
+        home,
+        ".kiro",
+        "cloud-cache",
+        "resolved",
+        "config",
+        "user",
+        "skills",
+      );
       const writeSkill = (root: string, name: string, contents: string) =>
         Effect.gen(function* () {
-          const directory = path.join(root, ".kiro", "skills", name);
-          yield* fileSystem.makeDirectory(directory, { recursive: true });
-          yield* fileSystem.writeFileString(path.join(directory, "SKILL.md"), contents);
+          yield* fileSystem.makeDirectory(path.join(root, name), { recursive: true });
+          yield* fileSystem.writeFileString(path.join(root, name, "SKILL.md"), contents);
         });
       yield* writeSkill(
-        workspace,
+        workspaceSkills,
         "review",
         "---\nname: Code Review\ndescription: Review the diff\n---\nBody",
       );
-      yield* writeSkill(home, "review", "---\nname: review\ndescription: Home review\n---\n");
-      yield* writeSkill(home, "deploy", "---\nname: deploy\ndescription: Ship it\n---\n");
-      yield* writeSkill(home, "broken", "---\ndescription: [unterminated\n---\n");
-      yield* fileSystem.makeDirectory(path.join(home, ".kiro", "skills", "no-skill-file"));
-      yield* fileSystem.writeFileString(path.join(home, ".kiro", "skills", "notes.md"), "notes");
+      yield* writeSkill(homeSkills, "review", "---\nname: review\ndescription: Home review\n---\n");
+      yield* writeSkill(homeSkills, "deploy", "---\nname: deploy\ndescription: Ship it\n---\n");
+      yield* writeSkill(homeSkills, "broken", "---\ndescription: [unterminated\n---\n");
+      yield* writeSkill(
+        cloudSkills,
+        "deploy",
+        "---\nname: deploy\ndescription: Cloud deploy\n---\n",
+      );
+      yield* writeSkill(
+        cloudSkills,
+        "poteto-mode",
+        "---\nname: poteto-mode\ndescription: Cloud\n---\n",
+      );
+      yield* fileSystem.makeDirectory(path.join(homeSkills, "no-skill-file"));
+      yield* fileSystem.writeFileString(path.join(homeSkills, "notes.md"), "notes");
 
       const skills = yield* discoverKiroSkills({ cwd: workspace, environment: { HOME: home } });
 
-      const homeSkill = (name: string) => path.join(home, ".kiro", "skills", name, "SKILL.md");
       assert.deepEqual(skills, [
-        { name: "broken", path: homeSkill("broken"), scope: "user", enabled: true },
+        {
+          name: "broken",
+          path: path.join(homeSkills, "broken", "SKILL.md"),
+          scope: "user",
+          enabled: true,
+        },
         {
           name: "deploy",
-          path: homeSkill("deploy"),
+          path: path.join(homeSkills, "deploy", "SKILL.md"),
           scope: "user",
           enabled: true,
           description: "Ship it",
         },
         {
+          name: "poteto-mode",
+          path: path.join(cloudSkills, "poteto-mode", "SKILL.md"),
+          scope: "user",
+          enabled: true,
+          description: "Cloud",
+        },
+        {
           name: "review",
-          path: path.join(workspace, ".kiro", "skills", "review", "SKILL.md"),
+          path: path.join(workspaceSkills, "review", "SKILL.md"),
           scope: "project",
           enabled: true,
           displayName: "Code Review",

@@ -48,7 +48,7 @@ const readKiroSkill = Effect.fn("readKiroSkill")(
   Effect.orElseSucceed(() => undefined),
 );
 
-/** Kiro loads `.kiro/skills/<name>/SKILL.md` from the workspace and home; the workspace wins. */
+/** Kiro loads `.kiro/skills/<name>/SKILL.md` from the workspace, home and cloud cache, in that precedence. */
 export const discoverKiroSkills = Effect.fn("discoverKiroSkills")(function* (input: {
   readonly cwd?: string | undefined;
   readonly environment: NodeJS.ProcessEnv;
@@ -64,6 +64,11 @@ export const discoverKiroSkills = Effect.fn("discoverKiroSkills")(function* (inp
       ? [{ directory: path.join(input.cwd, ".kiro", "skills"), scope: "project" as const }]
       : []),
     { directory: path.join(home, ".kiro", "skills"), scope: "user" as const },
+    // Kiro syncs the account's cloud skills here when a session starts.
+    {
+      directory: path.join(home, ".kiro", "cloud-cache", "resolved", "config", "user", "skills"),
+      scope: "user" as const,
+    },
   ];
   const skillsByName = new Map<string, ServerProviderSkill>();
   for (const root of roots) {
